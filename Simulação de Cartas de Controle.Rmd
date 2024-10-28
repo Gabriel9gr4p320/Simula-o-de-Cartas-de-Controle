@@ -1,0 +1,509 @@
+---
+title: "Gráfico de Controle de Média Amostral: Um estudo de desempenho das regras da Western Electric por simulação"
+
+author:
+- UNIVERSIDADE FEDERAL DE JUIZ DE FORA
+- Estatística
+- Aluno :Gabriel Faria de Paiva
+- Orientador :Prof. Lupercio F. Bessegato
+
+date: "JUIZ DE FORA   2024"
+
+output: 
+  html_document:
+    self_contained: True
+    toc: TRUE
+    toc_depth: 4
+---
+
+# Simulação e Análise de Cartas de Controle Aplicando Regras de Western Electric
+
+## 1. Introdução
+
+O controle estatístico de processos (CEP) é uma ferramenta fundamental para a manutenção da qualidade em sistemas produtivos, permitindo identificar desvios no comportamento esperado de um processo. Uma das técnicas mais utilizadas no CEP são as Cartas de Controle, que monitoram variações de processos ao longo do tempo. As Regras de Western Electric foram desenvolvidas para complementar esse monitoramento, detectando padrões que indicam descontrole, mesmo quando as variações permanecem dentro dos limites tradicionais de 3-sigma. Este trabalho tem como objetivo simular e analisar o desempenho das Regras de Western Electric em cartas X-barra, implementando um conjunto de funções para aplicar essas regras e avaliar o impacto de diferentes parâmetros.
+
+As **Regras de Western Electric**, um conjunto de regras suplementares às cartas de controle tradicionais, são aplicadas para detectar padrões específicos de variação que podem indicar descontrole do processo, mesmo que os pontos não ultrapassem os limites tradicionais de controle (3-sigma). O objetivo deste estudo é realizar simulações para avaliar o desempenho dessas regras no contexto de um processo sob controle, analisando a ocorrência de alarmes e a efetividade na detecção de anomalias.
+
+## 2. Metodologia
+
+Neste estudo, utilizamos um modelo de simulação para gerar dados amostrais a partir de um processo produtivo controlado. O processo foi definido com uma média (\(\mu_0 = 33,3\)) e desvio padrão (\(\sigma_0 = 2,494\)), e as amostras possuem um tamanho de \(n = 5\). Para monitorar o processo, foram estabelecidos limites de controle com múltiplos de sigma, a saber: zonas de 1-sigma, 2-sigma e 3-sigma, aplicadas às cartas de controle.
+
+As quatro Regras de Western Electric implementadas no código foram:
+1. Um ponto fora dos limites de 3-sigma.
+2. Dois de três pontos consecutivos fora dos limites de 2-sigma.
+3. Quatro de cinco pontos consecutivos fora dos limites de 1-sigma.
+4. Oito pontos consecutivos do mesmo lado da linha central.
+
+Essas regras foram implementadas em R, utilizando algoritmos para identificar os pontos que violam essas condições, além de calcular a **taxa de alarmes** e outras métricas relevantes, como a **quantidade média de amostras entre alarmes**.
+
+
+```{r}
+
+#+                    FUNÇÕES PARA AS REGRAS DE ALARMES
+#+ 
+#+  Regras de Western Eleetric
+#+  
+#+  1. UM PONTO CAIR FORA DOS LIMITES 3-SIGMA
+#+  
+#+  2. DOIS DE TRES PONTOS CONSECUTIVOS CAIREM ALEM DO LIMITE 2-SIGMA
+#+  
+#+  3. QUATRO DE CINCO PONTOS CONSECUTIVOS CAIREM A UMA DISTANCIA DE 1-SIGMA 
+#+  OU ALEM DA LINHA CENTRAL
+#+  
+#+  4. OITO PONTOS CONSECUTIVOS CAIREM EM UM LADO DA LINHA CENTAL
+#+  
+
+
+# Regra 1: Pontos fora da zona de controle
+# Acima limite superior de controle e abaixo do limite inferior de controle
+regra_1 <- function(dados, limites){
+  
+  medias_amostrais <- dados
+  limites_3s <- limites
+  
+  # Vetor de índices dos pontos fora da zona de controle:
+  fora_3s <- which(medias_amostrais <= limites_3s[1] | medias_amostrais >= limites_3s[2])
+  
+  # Graficamente
+  if (length(fora_3s) > 0) {
+    points(x = fora_3s, y = medias_amostrais[fora_3s], col = "red", pch = 17)
+    text(x = fora_3s, y = medias_amostrais[fora_3s], 
+         label = fora_3s, cex = 0.9, pos = 4, font = 2)
+    
+    # Calcular métricas
+    quantidade_alarmes <- length(fora_3s)
+    quantidade_pontos <- length(dados)
+    taxa_alarmes <- quantidade_alarmes / quantidade_pontos
+    amostras_entre_alarmes <- quantidade_pontos / quantidade_alarmes
+    
+    # Exibir resultados
+    cat("Quantidade de alarmes:", quantidade_alarmes, "\n")
+    cat("Quantidade de pontos:", quantidade_pontos, "\n")
+    cat("Taxa de alarmes:", round(taxa_alarmes, 5), "\n")
+    cat("Amostras entre alarmes:", round(amostras_entre_alarmes, 3), "\n")
+    return(taxa_alarmes)
+  } else {
+    cat("Nenhum ponto fora dos limites de controle.\n")
+    return(0)
+  }
+}
+
+# Regra 2: Dois de três pontos consecutivos caírem além do limite 2-Sigma
+regra_2 <- function(dados, limites){
+  
+  medias_amostrais <- dados
+  limites_2s <- limites
+  
+  # verificando Pontos fora da zona de advertência (regra 2)
+  # ABAIXO
+  fora_2s_abaixo <- which(medias_amostrais <= limites_2s[1])
+  
+  diferenca_abaixo <- diff(fora_2s_abaixo)
+  # se o resultado de diff for 1 ou 2 entao encaixa na regra 2
+  # ajusatando tamanho compativel
+  # Filtrando índices com diferença de 1 e 2
+  indices_1_abaixo <- fora_2s_abaixo[c(diferenca_abaixo == 1, NA)]
+  indices_2_abaixo <- fora_2s_abaixo[c(diferenca_abaixo == 2, NA)]
+  
+  # ACIMA
+  fora_2s_acima <- which(medias_amostrais >= limites_2s[2])
+  
+  diferenca_acima <- diff(fora_2s_acima)
+  # Filtrando índices com diferença de 1 e 2
+  indices_1_acima <- fora_2s_acima[c(diferenca_acima == 1, NA)]
+  indices_2_acima <- fora_2s_acima[c(diferenca_acima == 2, NA)]
+  
+  # Criando coordenadas x para marcar pontos
+  x_pontos <- c(indices_1_abaixo, indices_1_abaixo + 1, indices_2_abaixo, indices_2_abaixo + 2,
+                indices_1_acima, indices_1_acima + 1, indices_2_acima, indices_2_acima + 2)
+  
+  # Graficamente
+  if (length(x_pontos) > 0) {
+    points(x = x_pontos, 
+           y = medias_amostrais[x_pontos]
+           , col = "red", pch = 15)
+    text(x = x_pontos, y = medias_amostrais[x_pontos], label = x_pontos, cex = 0.5, pos = 3, font = 2)
+    
+    # Calcular métricas
+    quantidade_alarmes <- length(x_pontos)
+    quantidade_pontos <- length(dados)
+    taxa_alarmes <- quantidade_alarmes / quantidade_pontos
+    amostras_entre_alarmes <- quantidade_pontos / quantidade_alarmes
+    
+    # Exibir resultados
+    cat("Quantidade de alarmes:", quantidade_alarmes, "\n")
+    cat("Quantidade de pontos:", quantidade_pontos, "\n")
+    cat("Taxa de alarmes:", round(taxa_alarmes, 5), "\n")
+    cat("Amostras entre alarmes:", round(amostras_entre_alarmes, 3), "\n")
+    return(taxa_alarmes)
+  } else {
+    cat("Nenhum ponto fora dos limites de controle.\n")
+    return(0)
+  }
+}
+
+# Regra 3: Quatro de cinco pontos consecutivos caírem a uma distância de 1-Sigma ou além da linha central
+regra_3 <- function(dados, limites){
+  
+  medias_amostrais <- dados
+  limites_1s <- limites
+  
+  # Inicializar o vetor para armazenar os índices dos pontos que satisfazem a regra
+  resultados <- c()
+  
+  # Loop para verificar a regra 3 em conjuntos de 5 pontos consecutivos
+  for (i in 5:length(medias_amostrais)) {
+    vetor <- medias_amostrais[(i-4):i]
+    
+    if (sum(vetor <= limites_1s[1]) >= 4) {
+      resultados <- c(resultados, (i-4):i)
+    }
+    if (sum(vetor >= limites_1s[2]) >= 4) {
+      resultados <- c(resultados, (i-4):i)
+    }
+  }
+  
+  # Remover duplicatas dos resultados
+  x_pontos <- unique(resultados)
+  
+  # Graficamente
+  if (length(x_pontos) > 0) {
+    points(x = x_pontos, 
+           y = medias_amostrais[x_pontos]
+           , col = "red", pch = 15)
+    text(x = x_pontos, y = medias_amostrais[x_pontos], 
+         label = x_pontos, cex = 0.5, pos = 3, font = 2)
+    
+    # Calcular métricas
+    quantidade_alarmes <- length(x_pontos)
+    quantidade_pontos <- length(dados)
+    taxa_alarmes <- quantidade_alarmes / quantidade_pontos
+    amostras_entre_alarmes <- quantidade_pontos / quantidade_alarmes
+    
+    # Exibir resultados
+    cat("Quantidade de alarmes:", quantidade_alarmes, "\n")
+    cat("Quantidade de pontos:", quantidade_pontos, "\n")
+    cat("Taxa de alarmes:", round(taxa_alarmes, 5), "\n")
+    cat("Amostras entre alarmes:", round(amostras_entre_alarmes, 3), "\n")
+    return(taxa_alarmes)
+  } else {
+    cat("Nenhum ponto fora dos limites de controle.\n")
+    return(0)
+  }
+}
+
+# Regra 4: Oito pontos consecutivos caírem em um lado da linha central
+regra_4 <- function(dados, media){
+  
+  medias_amostrais <- dados
+  
+  # Inicializar o vetor para armazenar os índices dos pontos que satisfazem a regra
+  resultados <- c()
+  
+  # Loop para verificar a regra 4 em conjuntos de 8 pontos consecutivos
+  for (i in 8:length(medias_amostrais)) {
+    vetor <- medias_amostrais[(i-7):i]
+    
+    if (all(vetor < media)) {
+      resultados <- c(resultados, (i-7):i)
+    }
+    if (all(vetor > media)) {
+      resultados <- c(resultados, (i-7):i)
+    }
+  }
+  
+  # Remover duplicatas dos resultados
+  x_pontos <- unique(resultados)
+  
+  # Graficamente
+  if (length(x_pontos) > 0) {
+    points(x = x_pontos, 
+           y = medias_amostrais[x_pontos]
+           , col = "red", pch = 15)
+    text(x = x_pontos, y = medias_amostrais[x_pontos], 
+         label = x_pontos, cex = 0.5, pos = 3, font = 2)
+    
+    # Calcular métricas
+    quantidade_alarmes <- length(x_pontos)
+    quantidade_pontos <- length(dados)
+    taxa_alarmes <- quantidade_alarmes / quantidade_pontos
+    amostras_entre_alarmes <- quantidade_pontos / quantidade_alarmes
+    
+    # Exibir resultados
+    cat("Quantidade de alarmes:", quantidade_alarmes, "\n")
+    cat("Quantidade de pontos:", quantidade_pontos, "\n")
+    cat("Taxa de alarmes:", round(taxa_alarmes, 5), "\n")
+    cat("Amostras entre alarmes:", round(amostras_entre_alarmes, 3), "\n")
+    return(taxa_alarmes)
+  } else {
+    cat("Nenhum ponto fora dos limites de controle.\n")
+    return(0)
+  }
+}
+
+```
+
+```{r}
+
+# Parâmetros do processo sob controle
+mi0 <- 33.3
+sigma0 <- 2.494
+
+# Parâmetros reais do processo
+mi <- mi0
+sigma <- sigma0
+
+# Parâmetros de planejamento da carta
+n <- 5
+k <- 3  # Limites zona de controle
+k2 <- 2 # Limites zona de advertência
+k3 <- 1 # Limites da zona de alerta
+
+# Geração dos dados amostrais
+tam <- 1E3
+
+set.seed(666)
+
+medias.amostrais <- replicate(tam, mean(rnorm(n, mi, sigma)))
+
+# Limites 3-sigma
+limites.3s <- c(-1, 1) * k * sigma0 / sqrt(n) + mi0
+
+# Limites 2-sigma
+limites.2s <- c(-1, 1) * k2 * sigma0 / sqrt(n) + mi0
+
+# Limites 1-sigma
+limites.1s <- c(-1, 1) * k3 * sigma0 / sqrt(n) + mi0
+
+# Grafico X-barra
+ajuste <- 0.6
+lim.plot <- limites.3s + c(-1, 1)*sigma/sqrt(n)*ajuste
+lim.plot
+
+
+plot(medias.amostrais, type = "o", ylim = lim.plot, main = "Grafico X-barra", 
+     xlab = "Subgrupo", ylab = "Médias")
+
+# anotação dos limites da zona de controle e linha média
+abline(h = c(limites.3s, mi0), lty = c(1, 1, 2))
+
+# anotação limites da zona de advertência (k2)
+abline(h = limites.2s, lty = 2, col = "#7E7E7E")
+
+# anotação do início da zona de alerta (k3)
+abline(h = limites.1s, lty = 2, col = "#BEBEBE")
+
+
+# Função para calcular falsos positivos
+calcula_falsos_positivos <- function(taxa_alarmes, taxa_teorica) {
+  falsos_positivos <- abs(taxa_alarmes - taxa_teorica)
+  return(falsos_positivos)
+}
+
+# Aplicando no caso da Regra 1
+taxa_teorica_3sigma <- 2 * pnorm(-3)
+taxa_alarmes_regra1 <- regra_1(medias.amostrais, limites.3s)
+falsos_positivos_regra1 <- calcula_falsos_positivos(taxa_alarmes_regra1, taxa_teorica_3sigma)
+
+cat("Falsos positivos para a Regra 1:", falsos_positivos_regra1, "\n")
+
+
+# Função para calcular Erro Médio Quadrático
+calcula_mse <- function(taxa_observada, taxa_teorica){
+  return(mean((taxa_observada - taxa_teorica)^2))
+}
+
+mse_regra_1 <- calcula_mse(taxa_alarmes_regra1, taxa_teorica_3sigma)
+cat("Erro médio quadrático para a Regra 1:", mse_regra_1, "\n")
+
+
+regra_2(medias.amostrais,limites.2s)
+regra_3(medias.amostrais,limites.1s)
+regra_4(medias.amostrais,mi)
+
+verifica <- function(dados, limites){
+  medias_amostrais <- dados
+  limites_3s <- limites
+  # Vetor de índices dos pontos fora da zona de controle:
+  fora_3s <- which(medias_amostrais <= limites_3s[1] | medias_amostrais >= limites_3s[2])
+  if (length(fora_3s) > 0) {
+    taxa_alarmes <- length(fora_3s) / length(medias_amostrais)
+    return(taxa_alarmes)
+  } else {
+    return(0)
+  }
+}
+
+set.seed(666)
+
+amostra <- replicate(1E3,
+                     verifica(
+                       replicate(1E3, mean(rnorm(n, mi, sigma))), 
+                       c(-1, 1) * k * sigma0 / sqrt(n) + mi0))
+
+# Plotar o histograma
+hist(amostra, freq = FALSE, main = "Histograma da Amostra")
+
+(media_amostra <- mean(amostra))
+abline(v = media_amostra, col = "red", lwd = 2, lty = 2)  # Adiciona linha vertical para a média amostral
+
+(media_teoria <- 2*pnorm(-k))
+abline(v = media_teoria, col = "blue", lwd = 2, lty = 2)  # Adiciona linha vertical para a média teórica
+
+
+# Loop para otimizar o valor de k
+best_k <- 0
+lowest_mse <- Inf
+
+for (k in seq(1, 4, 0.1)) {
+  limites_3s <- c(-1, 1) * k * sigma0 / sqrt(n) + mi0
+  taxa_alarmes <- regra_1(medias.amostrais, limites_3s)
+  mse <- calcula_mse(taxa_alarmes, taxa_teorica_3sigma)
+  
+  if (mse < lowest_mse) {
+    lowest_mse <- mse
+    best_k <- k
+  }
+}
+
+cat("Melhor valor de k:", best_k, "com menor MSE:", lowest_mse, "\n")
+
+
+# Visualizar os dados com zonas coloridas para os limites
+plot(medias.amostrais, type = "o", ylim = lim.plot, main = "Grafico X-barra", xlab = "Subgrupo", ylab = "Médias")
+
+# Adicionar zonas coloridas
+rect(0, limites.3s[1], length(medias.amostrais), limites.3s[2], col = rgb(1, 0, 0, 0.2), border = NA)
+rect(0, limites.2s[1], length(medias.amostrais), limites.2s[2], col = rgb(1, 1, 0, 0.2), border = NA)
+
+abline(h = c(limites.3s, mi0), lty = c(1, 1, 2))
+abline(h = limites.2s, lty = 2, col = "#7E7E7E")
+abline(h = limites.1s, lty = 2, col = "#BEBEBE")
+
+```
+
+Segue abaixo uma tabela que ilustra o comportamento da taxa de alarmes em função da variação do valor de *k* para a Regra 1.
+
+```{r}
+
+quantidade_pontos <- 1E3  # Quantidade de pontos na amostra
+k_values <- seq(1, 4, by = 0.1)  # Valores de k a variar
+
+# Tabela para armazenar os resultados
+resultados <- matrix(NA, nrow = length(k_values), ncol = 2,
+                     dimnames = list(NULL, c("Valor_de_k", "Taxa_de_Alarmes")))
+
+# Loop para calcular os resultados para cada valor de k
+for (i in seq_along(k_values)) {
+  k <- k_values[i]
+  
+  set.seed(666)
+  
+  # Gerar as amostras e calcular a média
+  amostra <- replicate(quantidade_pontos,
+                       verifica(replicate(quantidade_pontos, mean(rnorm(n, mi, sigma))),
+                                c(-1, 1) * k * sigma0 / sqrt(n) + mi0))
+  
+  # Calcular a média das taxas de alarmes
+  taxa_media <- mean(amostra)
+  
+  # Armazenar o resultado na tabela
+  resultados[i, ] <- c(k, taxa_media)
+}
+
+# Mostrar a tabela de resultados
+print(resultados)
+
+```
+
+### **Análise de Cenários Baseados no Montgomery**
+
+- Simula um **desvio gradual da média** para ver como as Regras de Western Electric detectam esse desvio. Por exemplo, um cenário clássico do Montgomery é a mudança de \( \mu_0 = 33,3 \) para \( \mu = 34,5 \), simulando um processo levemente fora de controle.
+
+A ideia é simular um processo com uma média que inicialmente está sob controle e, ao longo do tempo, começa a se desviar. Este código usará as Regras de Western Electric para monitorar esse desvio gradual.
+
+**Código para Simulação com Deslocamento Gradual da Média**
+```{r}
+
+# Parâmetros iniciais do processo sob controle
+mi0 <- 33.3  # Média inicial do processo
+sigma0 <- 2.494  # Desvio padrão
+n <- 5  # Tamanho da amostra
+tam <- 1000  # Número de subgrupos
+
+# Geração de dados com deslocamento gradual da média
+deslocamento <- seq(mi0, 35, length.out = tam)  # A média vai de 33.3 até 35 ao longo dos subgrupos
+medias_amostrais_deslocadas <- sapply(deslocamento, function(mi) mean(rnorm(n, mi, sigma0)))
+
+# Limites de controle (3-sigma, 2-sigma, 1-sigma)
+limites_3s <- c(-1, 1) * 3 * sigma0 / sqrt(n) + mi0
+limites_2s <- c(-1, 1) * 2 * sigma0 / sqrt(n) + mi0
+limites_1s <- c(-1, 1) * 1 * sigma0 / sqrt(n) + mi0
+
+# Função para aplicar a Regra 1 e identificar alarmes
+regra_1 <- function(dados, limites) {
+  fora_3s <- which(dados <= limites[1] | dados >= limites[2])
+  return(fora_3s)
+}
+
+# Aplicando a Regra 1 nos dados com deslocamento
+alarmes_regra_1 <- regra_1(medias_amostrais_deslocadas, limites_3s)
+
+# Gráfico X-barra com deslocamento gradual e alarmes destacados
+plot(medias_amostrais_deslocadas, type = "o", ylim = range(c(limites_3s, medias_amostrais_deslocadas)),
+     main = "Gráfico X-barra com Deslocamento Gradual da Média",
+     xlab = "Subgrupo", ylab = "Média Amostral")
+abline(h = limites_3s, col = "red", lty = 2)  # Limites de 3-sigma
+abline(h = limites_2s, col = "orange", lty = 2)  # Limites de 2-sigma
+abline(h = limites_1s, col = "green", lty = 2)  # Limites de 1-sigma
+points(alarmes_regra_1, medias_amostrais_deslocadas[alarmes_regra_1], col = "red", pch = 19)  # Pontos com alarmes
+
+```
+
+#### Explicação do Código:
+1. **Deslocamento Gradual da Média**: A variável `deslocamento` faz com que a média do processo comece em 33,3 e aumente gradualmente até 35. Isso simula uma mudança lenta e gradual no processo.
+2. **Geração de Amostras**: Para cada subgrupo, o código gera uma média amostral com uma média variável ao longo do tempo, simulando o deslocamento progressivo.
+3. **Aplicação da Regra 1**: A função `regra_1` identifica os pontos que estão fora dos limites de controle de 3-sigma. Esses são os alarmes, ou seja, pontos que indicam que o processo pode estar fora de controle.
+4. **Visualização**: O gráfico X-barra é plotado, mostrando as médias amostrais ao longo dos subgrupos. Os pontos que violam a Regra 1 (fora dos limites de 3-sigma) são destacados em vermelho.
+
+#### Interpretação dos Resultados:
+1. **Fase Inicial (Processo Sob Controle)**: No início do gráfico, a maioria dos pontos se encontra dentro dos limites de controle (3-sigma), o que indica que o processo está sob controle.
+2. **Deslocamento Gradual**: À medida que o valor de `mi` aumenta gradualmente, as médias amostrais começam a se aproximar dos limites superiores de controle.
+3. **Alarmes**: Quando as médias ultrapassam os limites de 3-sigma, a **Regra 1** dispara alarmes. Esses pontos fora dos limites indicam que o processo está fora de controle, sugerindo um deslocamento na média que requer intervenção.
+4. **Eficiência da Detecção**: O deslocamento gradual demonstra como a Regra 1 é eficaz em detectar mudanças progressivas no processo. Conforme a média se desloca para longe da média original (\( \mu_0 \)), os alarmes começam a surgir, sinalizando a necessidade de correção no processo.
+
+#### Discussão:
+- Essa simulação é útil para demonstrar como as **Regras de Western Electric** detectam mudanças no processo que podem não ser visíveis no início, mas que progressivamente levam ao descontrole.
+- Uma próxima etapa seria aplicar outras regras, como a **Regra 2**, que pode detectar o deslocamento mais cedo, ou a **Regra 3**, que monitora mudanças mais sutis.  
+
+## 3. Resultados e Discussão
+
+Os resultados obtidos a partir das simulações mostraram que a Regra 1, que monitora pontos fora dos limites de 3-sigma, apresentou uma taxa de alarmes de aproximadamente 0.001%, o que está em conformidade com a expectativa teórica para processos sob controle. Já a Regra 2, que identifica dois de três pontos consecutivos fora dos limites de 2-sigma, teve uma taxa de alarmes mais elevada, sinalizando maior sensibilidade na detecção de desvios sutis no processo.
+
+A análise revelou que as Regras de Western Electric proporcionam uma detecção precoce de possíveis anomalias, especialmente em situações de deslocamento da média ou de variações menores, que podem não ser identificadas com os limites tradicionais de 3-sigma. Isso mostra a importância de usar essas regras como complemento às cartas de controle tradicionais, aumentando a robustez do monitoramento e melhorando a capacidade de detecção de desvios.
+
+
+Os gráficos de controle X-barra gerados para a simulação revelaram a eficácia das Regras de Western Electric na detecção de mudanças no processo. Abaixo estão os principais resultados:
+
+- **Regra 1**: Houve 1 alarmes para pontos fora dos limites de 3-sigma, com uma taxa média de alarmes de 0.001%. A quantidade média de amostras entre alarmes foi de 1000.
+  
+- **Regra 2**: Para a regra de dois pontos consecutivos fora de 2-sigma, foram detectados 14 alarmes. A taxa de alarmes foi de 0.014% com uma média de 71.429 amostras entre alarmes.
+
+- **Regra 3**: Observou-se uma quantidade significativa de alarmes quando quatro de cinco pontos consecutivos caíram além de 1-sigma. A taxa de alarmes foi de 0.033%, com uma quantidade média de 30.303 amostras entre alarmes.
+
+- **Regra 4**: A regra que monitora oito pontos consecutivos do mesmo lado da linha central identificou 17 alarmes, sugerindo possíveis deslocamentos no processo. A taxa de alarmes foi de 0.017%.
+
+## 4. Conclusão
+
+As simulações realizadas neste estudo demonstraram que as Regras de Western Electric são eficazes na identificação de padrões anômalos em um processo produtivo. As regras suplementares permitem uma detecção mais rápida de problemas potenciais, garantindo que as empresas possam intervir antes que os desvios se tornem críticos. No entanto, é importante ajustar os parâmetros de controle, como o valor de "k", para minimizar falsos positivos e otimizar a eficácia do monitoramento.
+
+Futuros estudos podem incluir comparações com outras metodologias, como as Regras de Nelson, além de aplicar a abordagem a dados reais de processos industriais para validar ainda mais as conclusões obtidas com base nas simulações.
+
+
+## **5. Referências**
+
+- Montgomery, D. C. (2009). **Introduction to Statistical Quality Control**.
+- Western Electric Company. (1956). **Statistical Quality Control Handbook**.
+
+
+
